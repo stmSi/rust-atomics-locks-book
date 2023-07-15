@@ -1,9 +1,36 @@
-use std::sync::atomic::{AtomicI32, AtomicU64, AtomicBool, AtomicPtr};
+use std::sync::atomic::{AtomicI32, AtomicU64, AtomicBool, AtomicPtr, fence};
 use std::sync::atomic::Ordering::{Release, Acquire, Relaxed, SeqCst};
 use std::thread;
 use std::time::Duration;
 
 fn main(){
+    static mut DATA: [u64; 10] = [0; 10];
+
+    const ATOMIC_FALSE: AtomicBool = AtomicBool::new(false);
+    static READY: [AtomicBool; 10] = [ATOMIC_FALSE; 10];
+
+    for i in 0..10{
+        thread::spawn(move || {
+            let data: u64 = i + 1; // some calculations
+            thread::sleep(Duration::from_millis(500));
+            unsafe { DATA[i as usize] = data };
+            READY[i as usize].store(true, Release);
+        });
+    }
+    thread::sleep(Duration::from_millis(500));
+    let ready: [bool; 10] = std::array::from_fn(|i| READY[i].load(Relaxed));
+
+    if ready.contains(&true) {
+        fence(Acquire);
+        for i in 0..10 {
+            if ready[i] {
+                println!("data{i} = {}", unsafe {DATA[i]});
+            }
+        }
+    }
+}
+
+fn main_06(){
     static A: AtomicBool = AtomicBool::new(false);
     static B: AtomicBool = AtomicBool::new(false);
 
